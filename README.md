@@ -4,7 +4,6 @@ Agente que juega solo a [Diamond Rush en minijuegos.com](https://www.minijuegos.
 Mira la pantalla, reconoce el tablero, planifica la ruta y mueve al personaje simulando el teclado.
 No lee la página web ni modifica el juego.
 
-Proyecto de la asignatura Sistemas Inteligentes (libro guía: *Inteligencia Artificial: Un enfoque moderno*, Russell y Norvig).
 
 ---
 
@@ -17,15 +16,7 @@ Proyecto de la asignatura Sistemas Inteligentes (libro guía: *Inteligencia Arti
 
 ## 2. Descargar el proyecto
 
-**Opción A, con git:**
-
-```
-git clone https://github.com/TU_USUARIO/TU_REPOSITORIO.git
-cd TU_REPOSITORIO
-```
-
-**Opción B, sin git:** en la página del repositorio pulsa **Code → Download ZIP**, descomprímelo y abre una terminal en esa carpeta.
-En Windows: abre la carpeta en el Explorador, escribe `powershell` en la barra de direcciones y pulsa Enter.
+Clonarlo o decargarlo en .zip
 
 ## 3. Instalar las dependencias (solo la primera vez)
 
