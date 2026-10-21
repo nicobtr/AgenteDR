@@ -43,7 +43,10 @@ def rejas_abiertas(tablero, estado, conexiones):
     if not tablero.rejas:
         return frozenset()
     abiertas = set(tablero.rejas_base_abiertas)
-    for p in pulsadores_activos(tablero, estado):
+    activos = pulsadores_activos(tablero, estado)
+    if tablero.reglas.rejas_permanentes:
+        activos = activos | estado.pulsadores_pisados
+    for p in activos:
         abiertas.update(conexiones.rejas_de(p))
     return frozenset(abiertas)
 
@@ -88,7 +91,9 @@ def simular(tablero, estado, direccion, conexiones):
         mas_alla = (destino[0] + df, destino[1] + dc)
         if not tablero.dentro(mas_alla) or mas_alla in piedras:
             return None  # fuera del tablero o dos piedras seguidas
-        if (mas_alla in diamantes or mas_alla in llaves_t) and not reglas.piedra_sobre_objetos:
+        if mas_alla in diamantes and not reglas.piedra_sobre_objetos:
+            return None
+        if mas_alla in llaves_t and not reglas.piedra_sobre_llaves:
             return None
         t = terreno[mas_alla[0]][mas_alla[1]]
         if t == HUECO and mas_alla not in huecos:
@@ -99,6 +104,11 @@ def simular(tablero, estado, direccion, conexiones):
         elif (t in (SUELO, PULSADOR) or t == HUECO
               or (t == PUERTA and mas_alla in puertas)):
             piedras = (piedras - {destino}) | {mas_alla}
+        elif t == PINCHOS and mas_alla in getattr(tablero, "pinchos_bajo_piedra", ()) \
+                and mas_alla not in usados:
+            piedras = (piedras - {destino}) | {mas_alla}   # vuelve a una casilla inicial de piedra
+        elif t == PINCHOS and reglas.piedra_sobre_pinchos and mas_alla not in usados:
+            piedras = (piedras - {destino}) | {mas_alla}   # pincho escondido aun no activado
         else:
             return None                            # muro, reja, pinchos, salida, puerta...
     else:
@@ -108,7 +118,11 @@ def simular(tablero, estado, direccion, conexiones):
         if t == HUECO and destino not in huecos:
             return None
         if t == PINCHOS and (not reglas.pinchos_transitables or destino in usados):
-            return None
+            # la casilla inicial de una piedra solo es un pincho "posible": se permite volver
+            # a pisarla (con penalizacion en el coste, ver coste_movimiento)
+            if not (destino in getattr(tablero, "pinchos_bajo_piedra", ())
+                    and reglas.penalizacion_bajo_piedra is not None):
+                return None
         if t == PUERTA and destino not in puertas:
             if llaves_m <= 0:
                 return None
@@ -116,7 +130,8 @@ def simular(tablero, estado, direccion, conexiones):
             puertas = puertas | {destino}
             if reglas.puerta_abre_sin_avanzar:
                 return Estado(estado.jugador, piedras, diamantes, llaves_t, llaves_m,
-                              puertas, huecos, recogidos, estado.pinchos_usados)
+                              puertas, huecos, recogidos, estado.pinchos_usados,
+                              estado.pulsadores_pisados)
         if t == SALIDA and not salida_abierta(tablero, estado):
             return None
 
@@ -132,14 +147,31 @@ def simular(tablero, estado, direccion, conexiones):
             llaves_t = llaves_t - {destino}
             llaves_m += 1
 
+    pisados = estado.pulsadores_pisados
+    if reglas.rejas_permanentes and tablero.pulsadores:
+        oprimidos = (piedras | {destino}) & tablero.pulsadores_set
+        if not oprimidos <= pisados:
+            pisados = pisados | oprimidos
     nuevo = Estado(destino, piedras, diamantes, llaves_t, llaves_m, puertas, huecos, recogidos,
-                   usados)
+                   usados, pisados)
 
     # Una reja que se cierra bajo los pies del jugador es un movimiento ilegal.
     if terreno[destino[0]][destino[1]] == REJA \
             and destino not in rejas_abiertas(tablero, nuevo, conexiones):
         return None
     return nuevo
+
+
+def coste_movimiento(tablero, estado, nuevo):
+    """Coste de un paso: 1, mas extras por pisar pinchos o volver a la casilla inicial de una
+    piedra (pincho posible ya pisado)."""
+    coste = 1
+    destino = nuevo.jugador
+    if tablero.terreno[destino[0]][destino[1]] == PINCHOS:
+        coste += tablero.reglas.coste_extra_pinchos
+        if destino in estado.pinchos_usados:   # solo posible en casillas iniciales de piedra
+            coste += tablero.reglas.penalizacion_bajo_piedra or 0
+    return coste
 
 
 def acciones_legales(tablero, estado, conexiones):
@@ -151,9 +183,7 @@ def acciones_legales(tablero, estado, conexiones):
         nuevo = simular(tablero, estado, direccion, conexiones)
         if nuevo is None:
             continue
-        coste = 1
-        if tablero.terreno[nuevo.jugador[0]][nuevo.jugador[1]] == PINCHOS:
-            coste += tablero.reglas.coste_extra_pinchos
+        coste = coste_movimiento(tablero, estado, nuevo)
         if nuevo.piedras != estado.piedras:   # empuja una piedra (a suelo, pulsador, hueco o lava)
             coste += tablero.reglas.coste_extra_empuje
         resultado.append((direccion, nuevo, coste))

@@ -17,9 +17,15 @@ si el juego se comporta distinto):
      se abre Y el jugador avanza en el mismo paso. Si en el juego hacen falta dos pulsaciones,
      ponlo en True.
   4. Una piedra solo puede empujarse a: suelo, pulsador, hueco, lava o puerta ya abierta, y
-     NUNCA sobre reja, pinchos, salida o puerta cerrada. Sobre un diamante/llave SI puede quedar
-     (piedra_sobre_objetos=True): el diamante sigue debajo y se recoge al apartar la piedra.
-     Si en el juego no se puede, usa --piedra-no-sobre-objetos.
+     NUNCA sobre reja, salida, puerta cerrada ni llave (piedra_sobre_llaves=False; en el
+     nivel 6 el juego no lo permite). Sobre un diamante SI (piedra_sobre_objetos=True; el
+     nivel 4 solo se resuelve asi): el diamante sigue debajo. Sobre un pincho escondido aun no
+     activado solo se permite si no hay otra ruta (planificador, regla piedra_sobre_pinchos).
+  11. Bajo cada piedra inicial puede haber un pincho escondido invisible en la captura: esa
+     casilla se trata como pincho escondido (piedra_inicial_sobre_pinchos=True), pero de forma
+     SUAVE: volver a pisarla no esta prohibido, cuesta penalizacion_bajo_piedra (30) pasos
+     extra. Asi el planificador la evita si hay alternativa (nivel 10) y la usa si no la hay
+     (niveles 7, 14 y 17 obligan a cruzarla varias veces).
   5. Una reja vista "abierta" al iniciar (reja_abierta) se considera abierta de forma fija,
      salvo que se conozca un pulsador que la controle.
   6. Una piedra que cae en lava desaparece y la lava sigue siendo lava.
@@ -31,6 +37,9 @@ si el juego se comporta distinto):
   10. Un pincho escondido se puede cruzar UNA vez: al salir de su casilla queda activado y pasa a
      comportarse como un muro (pinchos_se_cierran=True; --pinchos-reutilizables lo desactiva).
   8. Un pulsador oculto bajo el jugador o una piedra en la captura inicial no es visible.
+  12. Por defecto una reja solo esta abierta MIENTRAS su pulsador esta oprimido (jugador o
+     piedra encima). Si asi no hay ruta, el planificador prueba rejas_permanentes=True (la reja
+     queda abierta tras pisar el pulsador una vez): el nivel 17 solo se resuelve asi.
 """
 
 from dataclasses import dataclass
@@ -81,8 +90,13 @@ class Reglas:
     puerta_abre_sin_avanzar: bool = False
     max_llaves: int = 1                # llaves que se pueden llevar a la vez
     llave_extra_bloquea: bool = True   # con el maximo de llaves, no se pisa otra llave
-    piedra_sobre_objetos: bool = True  # una piedra puede quedar encima de un diamante/llave
+    piedra_sobre_objetos: bool = True   # una piedra puede quedar encima de un DIAMANTE (nivel 4)
+    piedra_sobre_llaves: bool = False   # pero NO encima de una llave (nivel 6)
+    piedra_inicial_sobre_pinchos: bool = True  # bajo cada piedra inicial puede haber un pincho escondido
+    penalizacion_bajo_piedra: int = 30  # coste extra por volver a pisar la casilla inicial de una piedra
+    rejas_permanentes: bool = False    # True: una reja queda abierta tras pisar su pulsador una vez
     pinchos_se_cierran: bool = True    # un pincho escondido atravesado pasa a ser muro
+    piedra_sobre_pinchos: bool = False  # una piedra puede pasar por un pincho escondido no activado
     coste_extra_empuje: int = 0        # penalizacion por empujar una piedra (se usa al explorar)
 
 
@@ -98,6 +112,7 @@ class Estado:
     huecos_llenos: FrozenSet[Pos] = frozenset()
     diamantes_recogidos: int = 0
     pinchos_usados: FrozenSet[Pos] = frozenset()  # pinchos ya atravesados (ahora son muro)
+    pulsadores_pisados: FrozenSet[Pos] = frozenset()  # solo con rejas_permanentes
 
 
 class Tablero:
@@ -161,6 +176,7 @@ def parsear_matriz(matriz, reglas=None, conexiones=None, previo=None,
     jugadores = []
     desconocidas = []
     usados = set(pinchos_usados)
+    pinchos_bajo_piedra = set()
 
     for f in range(filas):
         fila_terreno = []
@@ -177,6 +193,14 @@ def parsear_matriz(matriz, reglas=None, conexiones=None, previo=None,
                 previo_tipo = previo.terreno[f][c]
                 if previo_tipo in (PULSADOR, REJA, PINCHOS):
                     tipo = previo_tipo
+
+            # Bajo una piedra puede esconderse un pincho que no se ve en la captura (nivel 10):
+            # se asume que esa casilla solo se puede pisar una vez. Solo en el primer
+            # reconocimiento; en los siguientes se conserva el terreno del tablero previo.
+            if obj == "piedra" and not usar_previo and reglas.piedra_inicial_sobre_pinchos \
+                    and tipo == SUELO:
+                tipo = PINCHOS
+                pinchos_bajo_piedra.add(pos)
 
             if cat == "pinchos_activados":
                 usados.add(pos)   # ya pisado en pantalla: se comporta como muro
@@ -199,6 +223,7 @@ def parsear_matriz(matriz, reglas=None, conexiones=None, previo=None,
         raise ValueError("Se esperaba exactamente un jugador y hay {}.".format(len(jugadores)))
 
     tablero = Tablero(terreno, rejas_abiertas, reglas)
+    tablero.pinchos_bajo_piedra = frozenset(pinchos_bajo_piedra)
     estado = Estado(
         jugador=jugadores[0],
         piedras=frozenset(piedras),

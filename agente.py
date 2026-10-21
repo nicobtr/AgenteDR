@@ -5,7 +5,7 @@ Uso (en la misma carpeta que control.py, config_tablero.json, matriz_tablero.jso
 
     python agente.py --solo-planificar      # calcula y muestra el plan, sin tocar el teclado
     python agente.py                        # usa matriz_tablero.json y juega (5 s para enfocar)
-    python agente.py --reconocer            # captura la pantalla, actualiza el JSON y juega
+    python agente.py --reconocer            # espera F8, captura la pantalla, actualiza el JSON y juega
 
 Flujo:
   1. Planifica con el modelo interno (A*).
@@ -175,7 +175,7 @@ def principal(argv=None):
     ap.add_argument("--llave-extra-pasa", action="store_true",
                     help="con el maximo de llaves, se puede pisar otra llave sin recogerla")
     ap.add_argument("--piedra-no-sobre-objetos", action="store_true",
-                    help="una piedra NO puede empujarse sobre un diamante/llave")
+                    help="una piedra NO puede empujarse sobre un diamante")
     ap.add_argument("--pinchos-reutilizables", action="store_true",
                     help="los pinchos escondidos NO se convierten en muro tras cruzarlos")
     ap.add_argument("--max-nodos", type=int, default=3000000,
@@ -186,6 +186,10 @@ def principal(argv=None):
                     help="coste extra por empujar una piedra al EXPLORAR un pulsador (0 = sin penalizar)")
     ap.add_argument("--no-inferir", action="store_true",
                     help="no deducir conexiones por eliminacion (observar siempre)")
+    ap.add_argument("--tecla", default="F8", choices=["F8", "F9", "F2"],
+                    help="tecla que inicia el agente (por defecto F8)")
+    ap.add_argument("--sin-tecla", action="store_true",
+                    help="no esperar la tecla: empezar enseguida (comportamiento antiguo)")
     args = ap.parse_args(argv)
 
     reglas = Reglas(pinchos_transitables=not args.pinchos_bloquean,
@@ -198,6 +202,9 @@ def principal(argv=None):
 
     observador = None
     if args.reconocer or not args.solo_planificar:
+        if not args.sin_tecla:
+            from tecla_inicio import esperar_tecla
+            esperar_tecla(args.tecla)
         from vision import ObservadorPantalla
         observador = ObservadorPantalla(espera=args.espera_animacion)
 
@@ -235,8 +242,9 @@ def principal(argv=None):
             print(" ".join(plan.acciones))
         return
 
-    print("Enfoca la ventana del juego. Empiezo en 2 segundos.")
-    time.sleep(2)
+    if args.sin_tecla:
+        print("Enfoca la ventana del juego. Empiezo en 2 segundos.")
+        time.sleep(2)
     agente = Agente(modelo, observador, Ejecutor(), planificador=planificador,
                     aprendiz=Aprendiz(conexiones, observador, umbral_error=args.umbral_error),
                     inferir=not args.no_inferir)

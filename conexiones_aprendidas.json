@@ -1,14 +1,39 @@
 {
-  "firma": "be8697a89c1d",
-  "conexiones": [],
-  "sin_efecto": [],
-  "intentos": [
+  "firma": "ea559add783c",
+  "conexiones": [
+    {
+      "pulsador": [
+        7,
+        2
+      ],
+      "rejas": [
+        [
+          8,
+          7
+        ]
+      ]
+    },
     {
       "pulsador": [
         12,
         6
       ],
-      "veces": 3
+      "rejas": [
+        [
+          9,
+          6
+        ]
+      ]
+    }
+  ],
+  "sin_efecto": [],
+  "intentos": [
+    {
+      "pulsador": [
+        7,
+        2
+      ],
+      "veces": 1
     }
   ]
 }

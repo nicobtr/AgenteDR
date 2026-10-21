@@ -642,7 +642,13 @@ def comprobar_invariantes(tc, m):
     tc.assertNotIn(e.jugador, e.piedras)
     for p in e.piedras:
         tipo = ty[p[0]][p[1]]
-        tc.assertNotIn(tipo, (MURO, LAVA, REJA, PINCHOS, SALIDA))
+        tc.assertNotIn(tipo, (MURO, LAVA, REJA, SALIDA))
+        if tipo == PINCHOS:
+            # solo sobre un pincho escondido aun no activado: el de su casilla inicial o,
+            # si el plan lo permite, uno al que se empujo
+            tc.assertNotIn(p, e.pinchos_usados)
+            tc.assertTrue(p in getattr(t, "pinchos_bajo_piedra", frozenset())
+                          or t.reglas.piedra_sobre_pinchos)
         if tipo == HUECO:
             tc.assertIn(p, e.huecos_llenos)
         if tipo == PUERTA:

@@ -26,9 +26,20 @@ RADIO_DESPLAZAMIENTO = 3
 
 class ObservadorPantalla:
     def __init__(self, ruta_config="config_tablero.json", carpeta_ejemplos=CARPETA_EJEMPLOS,
-                 espera=0.6):
-        with open(ruta_config, "r") as archivo:
-            self.config = json.load(archivo)
+                 espera=0.6, autocalibrar=True):
+        if autocalibrar:
+            # Detecta el tablero en la pantalla actual (sin seleccion manual).
+            from autocalibrar import calibrar
+            try:
+                self.config = calibrar()
+                print("Tablero detectado automaticamente:", self.config)
+            except Exception as error:
+                print("AVISO: autocalibracion fallida ({}). Uso {}.".format(error, ruta_config))
+                with open(ruta_config, "r") as archivo:
+                    self.config = json.load(archivo)
+        else:
+            with open(ruta_config, "r") as archivo:
+                self.config = json.load(archivo)
         self.ejemplos = self._cargar_ejemplos(carpeta_ejemplos)
         if not self.ejemplos:
             raise ValueError("No se encontraron imagenes dentro de {}/.".format(carpeta_ejemplos))
@@ -75,7 +86,7 @@ class ObservadorPantalla:
         return mejor_categoria, menor_error
 
     def _capturar_tablero(self):
-        with mss.mss() as captura:
+        with (getattr(mss, "MSS", None) or mss.mss)() as captura:
             pantalla = np.array(captura.grab(captura.monitors[1]))
         pantalla = cv2.cvtColor(pantalla, cv2.COLOR_BGRA2BGR)
         x, y = self.config["x"], self.config["y"]
